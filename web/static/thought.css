@@ -72,8 +72,8 @@
 .sn-row.top .sn-bar i { background: var(--wine); }
 @keyframes fill-w { to { width: var(--w); } }
 .sn-bar .mark { position: absolute; top: -3px; bottom: -3px; width: 0; border-left: 1.5px dashed; }
-.sn-bar .mark.r { left: 50%; border-color: var(--amber); }
-.sn-bar .mark.q { left: 80%; border-color: var(--wine); }
+.sn-bar .mark.r { left: var(--ra, 50%); border-color: var(--amber); }
+.sn-bar .mark.q { left: var(--qa, 80%); border-color: var(--wine); }
 .sn-score { font: 12px var(--mono); text-align: right; }
 .sn-row.top .sn-score { color: var(--wine); font-weight: 600; }
 .sn-dog { opacity: 0; animation: sniff-pass .9s ease-in-out; animation-delay: var(--t); }
@@ -97,7 +97,7 @@
   font-size: 14.5px; color: var(--ink-2); }
 .qx-idle b { color: var(--ink); }
 
-/* 2. squeezed into 4 numbers */
+/* 2. squeezed into one number per qubit */
 .squeeze { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 .squeeze blockquote { margin: 0; flex: 1 1 260px; font: 15px var(--hand); color: var(--ink); border-left: 3px solid var(--wine); padding: 4px 10px; }
 .squeeze .arrow { font: 26px var(--hand); color: var(--wine); }
@@ -134,9 +134,9 @@
 /* 5. verdict meter + stamp */
 .meter { position: relative; display: flex; height: 22px; border: 1.5px solid var(--ink); border-radius: 99px; margin: 26px 4px 30px; }
 .meter .zone { height: 100%; }
-.meter .z1 { width: 50%; background: var(--sage-soft); border-radius: 99px 0 0 99px; }
-.meter .z2 { width: 30%; background: var(--amber-soft); }
-.meter .z3 { width: 20%; background: var(--wine-soft); border-radius: 0 99px 99px 0; }
+.meter .z1 { width: var(--ra, 50%); background: var(--sage-soft); border-radius: 99px 0 0 99px; }
+.meter .z2 { width: calc(var(--qa, 80%) - var(--ra, 50%)); background: var(--amber-soft); }
+.meter .z3 { width: calc(100% - var(--qa, 80%)); background: var(--wine-soft); border-radius: 0 99px 99px 0; }
 .needle-m { position: absolute; top: -10px; bottom: -10px; left: 0; width: 0; border-left: 3px solid var(--ink);
   animation: slide-x 1.2s cubic-bezier(.3,1.3,.5,1) forwards; animation-delay: var(--t); }
 .needle-m span { position: absolute; top: -22px; left: -18px; font: 600 13px var(--mono); color: var(--ink); background: var(--card); padding: 0 4px; border-radius: 6px; }

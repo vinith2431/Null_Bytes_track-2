@@ -71,7 +71,7 @@
         ${dog(78)}
         ${bubble(30, 22, 72, "WOOF!", "pop d2 woof")}
         <text x="205" y="${G - 140}" class="score">0.77</text>`,
-      cap: "Our quantum sniffer scores every sentence the AI is about to read. The sneakiest sentence sets the score: review at 0.5, quarantine at 0.8." },
+      cap: "Our 8-qubit quantum sniffer scores every sentence the AI is about to read. The sneakiest sentence sets the score: review at 0.53, quarantine at 0.81." },
     { n: "4", t: "OUTPUT", title: "The fact checker",
       art: `<g><rect x="30" y="${G - 140}" width="140" height="96" rx="6" class="fill"/>
           <path d="M42 ${G - 120} h80 M42 ${G - 100} h96 M42 ${G - 80} h70 M42 ${G - 60} h86"/>

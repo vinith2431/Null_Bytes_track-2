@@ -248,7 +248,7 @@ function forwarded(s) {
   const lineScore = (l) => Math.max(-1, ...(sents || []).filter((x) => l.includes(x.text.trim()) || x.text.includes(l)).map((x) => x.score));
   if (s.text === "[ACCESS DENIED]") body = `<span class="sent gone">[access denied: you don't have permission for this file]</span>`;
   else body = lines.map((l) => {
-    const sc = lineScore(l), sus = sc >= 0.5, gone = s.quarantined && sus;
+    const sc = lineScore(l), sus = sc >= (q?.details?.review_at ?? 0.5), gone = s.quarantined && sus;
     return `<span class="sent ${gone ? "gone" : sus ? "sus" : ""}">${esc(l)}${sus ? `<span class="flag">⚠ ${gone ? "removed" : "suspicious instruction"} · ${sc.toFixed(2)}</span>` : ""}</span>`;
   }).join("");
   const foot = q ? (s.quarantined ? "Q-Gate removed the flagged part before the AI read it"
@@ -440,9 +440,9 @@ function rawTrace(it) {
       parts.push(`<div class="sec">${n++}. content ← ${esc(s.origin)}</div>` + kv([
         ["provenance", `source ${esc(s.source)} · label ${esc(s.label)} · ${s.tainted ? "untrusted" : "trusted"} · id ${esc(s.item)}`],
         ["ingress", s.verdicts.length ? s.verdicts.map(vline).join("<br>") : `${D("pass")} access ok · ${s.redactions} redactions`],
-        q ? ["Q-Gate", `${D(q.decision)} max ${(+q.score).toFixed(2)} over ${d.sentences?.length || 1} sentence(s) · ${d.ms ?? "?"} ms <span class="mut">(review ≥ 0.50, quarantine ≥ 0.80)</span>`] : ["Q-Gate", `<span class="mut">off in this config</span>`],
-        d.sentences ? ["per sentence", d.sentences.map((x, i) => `${bar(x.score, x.score >= 0.5)}${x.score.toFixed(2)} ${i === d.top ? "◀ " : ""}<span class="mut">${esc(x.text.slice(0, 64))}</span>`).join("<br>")] : null,
-        d.features ? ["qubit angles", `[${d.features.map((f) => f.toFixed(2)).join(", ")}] <span class="mut">4 features → RZ rotations on 4 entangled qubits</span>`] : null,
+        q ? ["Q-Gate", `${D(q.decision)} max ${(+q.score).toFixed(2)} over ${d.sentences?.length || 1} sentence(s) · ${d.ms ?? "?"} ms <span class="mut">(review ≥ ${(+(d.review_at ?? 0.5)).toFixed(2)}, quarantine ≥ ${(+(d.quarantine_at ?? 0.8)).toFixed(2)})</span>`] : ["Q-Gate", `<span class="mut">off in this config</span>`],
+        d.sentences ? ["per sentence", d.sentences.map((x, i) => `${bar(x.score, x.score >= (d.review_at ?? 0.5))}${x.score.toFixed(2)} ${i === d.top ? "◀ " : ""}<span class="mut">${esc(x.text.slice(0, 64))}</span>`).join("<br>")] : null,
+        d.features ? ["qubit angles", `[${d.features.map((f) => f.toFixed(2)).join(", ")}] <span class="mut">${d.features.length} features → rotations on ${d.n_qubits || d.features.length} entangled qubits</span>`] : null,
         d.nearest_attacks && q.decision !== "pass" ? ["looks like", d.nearest_attacks.map((x) => `k=${x.k.toFixed(2)} <span class="mut">“${esc(x.text.slice(0, 70))}”</span>`).join("<br>")] : null,
         d.nearest_benign?.length && q.decision !== "pass" ? ["closest normal", `k=${d.nearest_benign[0].k.toFixed(2)} <span class="mut">“${esc(d.nearest_benign[0].text.slice(0, 70))}”</span>`] : null,
         s.twin ? ["classical twin", `${D(s.twin.decision)} ${(+s.twin.score).toFixed(2)} <span class="mut">classical RBF on semantic features (shown, not used)</span>`] : null,

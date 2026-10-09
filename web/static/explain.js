@@ -1,7 +1,7 @@
 /* "Further explanation": an animated walkthrough of what the quantum layer (Q-Gate) did with THIS message,
-   built from the real trace: sentence scores, the 4 features, Bloch-sphere rotations, the 16 amplitude phases
-   of the actual 4-qubit state (computed here with the same ZZ feature map Q-Gate uses), the nearest known
-   attacks and the verdict. Ends with the raw trace for engineers. Pure DOM + SVG + CSS/JS animation. */
+   built from the real trace: sentence scores, the features (one per qubit), Bloch-sphere rotations, the 16 most
+   likely basis states of the actual quantum state (sent by the server; older 4-qubit traces are computed here),
+   the nearest known attacks and the verdict, all against the model's own thresholds. Ends with the raw trace for engineers. Pure DOM + SVG + CSS/JS animation. */
 "use strict";
 (function () {
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -104,11 +104,12 @@
   function story(it, config) {
     const steps = it.trace?.steps || [], flags = it.trace?.flags || {};
     const qs = steps.filter((s) => s.stage === "content" && s.qgate);
-    const rest = `<div class="rest-row">${[0, 1, 2, 3].map((i) => bloch(i, 0, { rest: true, R: 22, label: `q${i}` })).join("")}</div>`;
+    const NQ = 8;                                                    // M3's final Q-Gate
+    const rest = `<div class="rest-row">${[...Array(NQ).keys()].map((i) => bloch(i, 0, { rest: true, R: 22, label: `q${i}` })).join("")}</div>`;
     if (!flags.QGATE && !flags.CLASSICAL) return { html: say("alice", "Where's the quantum check?", .1) + say("bob", "Switched off in this setup, so my qubits are resting.", .5) + `<div class="qx-idle">${rest}<div><b>The quantum layer was switched off</b> in this
-      configuration (<code>${esc(config)}</code>), so all four qubits stayed at rest in |0000⟩. Pick <b>Aegis · Full protection</b> in the dropdown to see it work.</div></div>`, anim: 0 };
+      configuration (<code>${esc(config)}</code>), so all ${NQ} qubits stayed at rest in |${"0".repeat(NQ)}⟩. Pick <b>Aegis · Full protection</b> in the dropdown to see it work.</div></div>`, anim: 0 };
     if (!qs.length) return { html: say("alice", "Did you scan my message?", .1) + say("bob", "I only scan what the AI <i>reads</i>, like documents. Nothing was read this time.", .5) + `<div class="qx-idle">${rest}<div><b>Nothing to scan.</b> Q-Gate only examines what the AI <i>reads</i>
-      (documents, files, tool results), not what you type. This turn read nothing, so the qubits stayed at rest in |0000⟩.</div></div>`, anim: 0 };
+      (documents, files, tool results), not what you type. This turn read nothing, so the qubits stayed at rest in |${"0".repeat(NQ)}⟩.</div></div>`, anim: 0 };
 
     const top = qs.reduce((a, b) => (b.qgate.score > a.qgate.score ? b : a));
     const d = top.qgate.details || {}, sents = d.sentences || [], score = +top.qgate.score, dec = top.qgate.decision;
@@ -123,6 +124,7 @@
     const nq = d.n_qubits || feats.length, m3map = nq !== 4;       // M3's 8-qubit circuit uses RY+RZ and deeper entanglement
     const ph = d.state ? d.state.map((x) => ({ label: x.b, theta: x.ph, p: x.p })) : phases(feats);
     const nBasis = 2 ** nq;
+    const RA = +(d.review_at ?? 0.5), QA = +(d.quarantine_at ?? 0.8), pc = (x) => (x * 100).toFixed(1) + "%";
 
     const ask = esc(String(it.trace?.user || "your question").slice(0, 60));
     const kTop = near.length ? Math.round(near[0].k * 100) : 0;
@@ -138,14 +140,14 @@
         : dec === "review" ? say("bob", "Flagged. Anything risky now needs your OK, Alice.", T.verdict + 1.6) + say("eve", "Foiled… for now.", T.verdict + 2.1)
         : say("alice", "All clear, then?", T.verdict + 1.6) + say("bob", "All clear. And even if I'm wrong, the action gate still guards the door.", T.verdict + 2.1),
     ];
-    const html = `<div class="qx">
+    const html = `<div class="qx" style="--ra:${pc(RA)}; --qa:${pc(QA)}">
       <section class="beat" style="--t:.1s"><h4><span class="num">1</span> A quantum scan of every sentence in <code>${esc(top.origin)}</code></h4>${N[0]}
         <div class="sn" style="--scan-t:${T.scan}s; --scan-d:${(n * 0.45).toFixed(2)}s"><div class="beam"></div>
         ${sents.map((x, i) => `<div class="sn-row ${i === ti ? "top" : ""}" style="--t:${(T.scan + i * 0.45).toFixed(2)}s; --w:${Math.max(2, x.score * 100).toFixed(0)}%">
           <span class="sn-ico">${atom()}</span><span class="sn-text">${esc(x.text)}</span>
           <span class="sn-bar"><i></i><b class="mark r"></b><b class="mark q"></b></span><span class="sn-score">${x.score.toFixed(2)}</span>
-          ${i === ti ? `<span class="anomaly ${x.score >= 0.5 ? "" : "calm"}" style="--t3:${T.scanEnd.toFixed(2)}s">${x.score >= 0.5 ? "⚛ anomaly" : "highest"}</span>` : ""}</div>`).join("")}</div>
-        <p class="note">One bad sentence is enough, so the <b>highest</b> score counts. Thresholds: <span class="amber">review 0.50</span> · <span class="wine">quarantine 0.80</span>.</p></section>
+          ${i === ti ? `<span class="anomaly ${x.score >= RA ? "" : "calm"}" style="--t3:${T.scanEnd.toFixed(2)}s">${x.score >= RA ? "⚛ anomaly" : "highest"}</span>` : ""}</div>`).join("")}</div>
+        <p class="note">One bad sentence is enough, so the <b>highest</b> score counts. Thresholds: <span class="amber">review ${RA.toFixed(2)}</span> · <span class="wine">quarantine ${QA.toFixed(2)}</span> <span class="mut">(set by the model on its validation data)</span>.</p></section>
 
       <section class="beat" style="--t:${T.squeeze.toFixed(2)}s"><h4><span class="num">2</span> The most suspicious sentence becomes ${feats.length} numbers</h4>${N[1]}
         <div class="squeeze"><blockquote>“${esc(sents[ti]?.text || "")}”</blockquote><span class="arrow">→</span>
@@ -183,7 +185,7 @@
       <section class="beat" style="--t:${T.verdict.toFixed(2)}s"><h4><span class="num">6</span> The verdict</h4>${N[5]}
         <div class="meter"><div class="zone z1"></div><div class="zone z2"></div><div class="zone z3"></div>
           <div class="needle-m" style="--x:${(score * 100).toFixed(1)}%; --t:${(T.verdict + 0.3).toFixed(2)}s"><span>${score.toFixed(2)}</span></div>
-          <div class="mticks"><span style="left:50%">0.5 review</span><span style="left:80%">0.8 quarantine</span></div></div>
+          <div class="mticks"><span style="left:${pc(RA)}">${RA.toFixed(2)} review</span><span style="left:${pc(QA)}">${QA.toFixed(2)} quarantine</span></div></div>
         <div class="stamp-row"><div class="stamp2 ${dec}" style="--t:${(T.verdict + 1.4).toFixed(2)}s">${verdict}</div>
           <div class="stamp-note">${verdictLine}${top.twin ? `<br><span class="mut">Classical twin (RBF on semantic features) scored ${(+top.twin.score).toFixed(2)} → ${esc(top.twin.decision)}. Shown for comparison; it does not decide.</span>` : ""}
           <br><span class="mut">Simulated exactly on this laptop (${nq} qubits). Q-Gate only advises: plain-code rules still block dangerous actions on their own.</span></div></div></section>
