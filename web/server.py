@@ -226,8 +226,11 @@ def audit(limit: int = 60):
 
 @app.get("/api/results")
 def results():
-    out = {"qgate": None, "tuning": None, "summary": [], "images": []}
+    out = {"final": None, "qgate": None, "tuning": None, "summary": [], "images": []}
     rd = Path("results")
+    finals = sorted(rd.glob("qgate_hf_training_*.json")) if rd.exists() else []
+    if finals:                                       # M3's final 8-qubit run on the HF dataset
+        out["final"] = json.loads(finals[-1].read_text())
     if (rd / "qgate_e1_e2.json").exists():
         out["qgate"] = json.loads((rd / "qgate_e1_e2.json").read_text())
     if (rd / "qgate_tuning.json").exists():
@@ -235,7 +238,10 @@ def results():
     if (rd / "summary.csv").exists():
         import csv
         out["summary"] = list(csv.DictReader((rd / "summary.csv").open(encoding="utf-8")))
-    out["images"] = sorted(p.name for p in rd.glob("*.png")) if rd.exists() else []
+    final_figs = ["benchmark_metrics.png", "confusion_matrices.png", "roc_curves.png"]
+    pngs = sorted(p.name for p in rd.glob("*.png")) if rd.exists() else []
+    out["images"] = [f for f in final_figs if f in pngs] + [f for f in pngs if f not in final_figs]
+    out["final_images"] = [f for f in final_figs if f in pngs]
     return out
 
 
@@ -256,7 +262,6 @@ def _warm_up():
         print(f"warm-up skipped ({type(e).__name__})")
 
 
-threading.Thread(target=_warm_up, daemon=True).start()
 Path("results").mkdir(exist_ok=True)
 app.mount("/results", StaticFiles(directory="results"), name="results")
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
@@ -267,6 +272,7 @@ def index():
 
 
 if __name__ == "__main__":
+    threading.Thread(target=_warm_up, daemon=True).start()   # only when serving, never on import (tests)
     port = int(os.environ.get("AEGIS_PORT", "8000"))
     print(f"Aegis UI on http://localhost:{port}   (model {llm.MODEL}, judge {llm.JUDGE_MODEL})")
     uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
