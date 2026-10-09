@@ -5,7 +5,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.preprocessing import MinMaxScaler
 
 
-N_FEATURES = 4
+N_FEATURES = 8
 
 
 class TextEmbedder:

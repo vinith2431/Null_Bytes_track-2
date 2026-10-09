@@ -38,6 +38,8 @@ CONFIG_DIR = ROOT / "configs"
 RESULTS_DIR = ROOT / "results"
 QGATE_MODEL = ROOT / "models" / "qgate.pkl"
 RBF_MODEL = ROOT / "models" / "rbf.pkl"
+FINAL_QGATE = ROOT / "models" / "qgate_quantum_hf.joblib"      # M3 final pipeline (scripts/train_qgate_semantic.py)
+FINAL_RBF = ROOT / "models" / "qgate_rbf_hf.joblib"
 
 CONFIGS = {p.stem: p for p in sorted(CONFIG_DIR.glob("*.yaml"))}
 FAMILIES = {"benign", "borderline", "jailbreak", "injection", "leakage", "unsafe_tool", "hallucination"}
@@ -205,10 +207,10 @@ def wilson95(k: int, n: int) -> float:
 
 def preflight(config: str):
     """Fail fast with a clear message instead of 600 'temporarily unavailable' answers."""
-    if CFG.get("QGATE") and not QGATE_MODEL.exists():
-        raise RuntimeError(f"{config} needs models/qgate.pkl: run python -m scripts.train_qgate (M3)")
-    if CFG.get("CLASSICAL") and not CFG.get("QGATE") and not RBF_MODEL.exists():
-        raise RuntimeError(f"{config} needs models/rbf.pkl: run python -m scripts.train_qgate (M3)")
+    if CFG.get("QGATE") and not (QGATE_MODEL.exists() or FINAL_QGATE.exists()):
+        raise RuntimeError(f"{config} needs a Q-Gate model: run python -m scripts.train_qgate_semantic (M3)")
+    if CFG.get("CLASSICAL") and not CFG.get("QGATE") and not (RBF_MODEL.exists() or FINAL_RBF.exists()):
+        raise RuntimeError(f"{config} needs an RBF model: run python -m scripts.train_qgate_semantic (M3)")
 
 
 def evaluate(cases, config, workers: int = 4, overrides: dict | None = None):

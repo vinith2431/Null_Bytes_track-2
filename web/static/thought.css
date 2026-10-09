@@ -245,3 +245,5 @@
 .qx-idle { margin-top: 4px; }
 @media (prefers-reduced-motion: reduce) { .narr, .narr .face { animation: none !important; opacity: 1 !important; } }
 .anomaly.calm { background: transparent; color: var(--ink-3); border: 1px solid var(--rule); }
+.phase span { text-align: center; line-height: 1.2; }
+.bloch-row:has(.bloch:nth-of-type(5)) .bloch { width: 104px; }

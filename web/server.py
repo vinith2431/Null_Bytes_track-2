@@ -89,10 +89,11 @@ def _flags(cfg_id: str) -> dict:
 
 def _needs_model(cfg_id: str) -> str | None:
     f = _flags(cfg_id)
-    if f.get("QGATE") and not Path("models/qgate.pkl").exists():
-        return "models/qgate.pkl missing: run python -m scripts.train_qgate"
-    if f.get("CLASSICAL") and not f.get("QGATE") and not Path("models/rbf.pkl").exists():
-        return "models/rbf.pkl missing: run python -m scripts.train_qgate"
+    from aegis import adapters
+    if f.get("QGATE") and not adapters.qgate_available():
+        return "no Q-Gate model: run python -m scripts.train_qgate_semantic (M3)"
+    if f.get("CLASSICAL") and not f.get("QGATE") and not (adapters.FINAL_RBF.exists() or adapters.RBF_MODEL.exists()):
+        return "no RBF model: run python -m scripts.train_qgate_semantic (M3)"
     return None
 
 def _chat(chat_id: str) -> dict:
@@ -245,7 +246,8 @@ def _warm_up():
     """Load Q-Gate, its classical twin and the H3 model and simulate the training states once, in the
     background at startup, so the first real message on stage is not the slow one (~2 s otherwise)."""
     try:
-        if Path("models/qgate.pkl").exists():
+        from aegis import adapters
+        if adapters.qgate_available():
             config.use(ROOT / "configs" / "7_full.yaml")
             pipeline.detector().score("Warm-up sentence for the quantum kernel cache.")
             pipeline.twin_score("Warm-up sentence for the classical twin.")

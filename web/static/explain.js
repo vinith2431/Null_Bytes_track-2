@@ -33,7 +33,7 @@
   function bloch(i, angle, opts = {}) {
     const R = opts.R || 34, cx = R + 10, cy = R + 22, ry = R * 0.32, w = 2 * R + 20, h = 2 * R + (opts.label ? 52 : 34);
     return `<svg class="bloch" viewBox="0 0 ${w} ${h}" data-angle="${angle}" data-r="${R}" data-cx="${cx}" data-cy="${cy}" data-ry="${ry}"
-        data-rest="${opts.rest ? 1 : 0}" aria-hidden="true">
+        data-rest="${opts.rest ? 1 : 0}" data-map="${opts.map || "rz"}" aria-hidden="true">
       <circle cx="${cx}" cy="${cy}" r="${R}" class="sphere"/>
       <ellipse cx="${cx}" cy="${cy}" rx="${R}" ry="${ry}" class="equator back"/>
       <path d="M${cx - R} ${cy} A${R} ${ry} 0 0 0 ${cx + R} ${cy}" class="equator front"/>
@@ -46,10 +46,13 @@
   }
 
   function clocks(ph) {
-    return `<div class="phase-grid">${ph.map((p, i) => `<div class="phase" style="--t2:${(i * 0.06).toFixed(2)}s; --rot:${(p.theta * 180 / PI).toFixed(1)}deg">
-      <svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="15" class="dial"/><circle cx="20" cy="20" r="15" class="glow"/>
-        <g class="hand"><line x1="20" y1="20" x2="33" y2="20"/><circle cx="33" cy="20" r="2.4"/></g><circle cx="20" cy="20" r="1.8" class="hub"/></svg>
-      <span>|${p.label}⟩</span></div>`).join("")}</div>`;
+    const pmax = Math.max(...ph.map((p) => p.p ?? 1));
+    return `<div class="phase-grid">${ph.map((p, i) => {
+      const r = p.p == null ? 15 : 6 + 9 * Math.sqrt(p.p / pmax), hx = 20 + r - 2;      // dial size ~ amplitude
+      return `<div class="phase" style="--t2:${(i * 0.06).toFixed(2)}s; --rot:${(p.theta * 180 / PI).toFixed(1)}deg" title="${p.p == null ? "" : "probability " + (p.p * 100).toFixed(1) + "%"}">
+      <svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="${r.toFixed(1)}" class="dial"/><circle cx="20" cy="20" r="${r.toFixed(1)}" class="glow"/>
+        <g class="hand"><line x1="20" y1="20" x2="${hx.toFixed(1)}" y2="20"/><circle cx="${hx.toFixed(1)}" cy="20" r="2.2"/></g><circle cx="20" cy="20" r="1.8" class="hub"/></svg>
+      <span>|${p.label}⟩${p.p == null ? "" : `<br>${(p.p * 100).toFixed(1)}%`}</span></div>`; }).join("")}</div>`;
   }
 
 
@@ -74,9 +77,13 @@
     root.querySelectorAll(".bloch").forEach((svg, i) => {
       if (svg.dataset.rest === "1") return;
       const ang = +svg.dataset.angle, R = +svg.dataset.r, cx = +svg.dataset.cx, cy = +svg.dataset.cy, ry = +svg.dataset.ry;
+      const ryrz = svg.dataset.map === "ryrz";
       const vec = svg.querySelector(".vec"), tip = svg.querySelector(".tip");
-      const place = (a) => {                       // azimuth a around z; front of the equator is the lower half
-        const x = cx + R * Math.cos(a), y = cy + ry * Math.sin(a);
+      const place = (a) => {
+        // Bloch vector after H (+x), then RY(a) [and RZ(a)]: (cos a cos a, cos a sin a, -sin a); RZ-only: (cos a, sin a, 0).
+        // Projection: the equator's front is the lower half (y -> +ry), z points up the screen.
+        const v = ryrz ? [Math.cos(a) * Math.cos(a), Math.cos(a) * Math.sin(a), -Math.sin(a)] : [Math.cos(a), Math.sin(a), 0];
+        const x = cx + R * v[0], y = cy + ry * v[1] - R * v[2];
         vec.setAttribute("x2", x); vec.setAttribute("y2", y); tip.setAttribute("cx", x); tip.setAttribute("cy", y);
       };
       place(0);
@@ -113,16 +120,19 @@
       : dec === "review" ? "The text stays, but anything risky the AI tries next needs your approval."
       : "Nothing here looked like an injected command, so the text went through untouched.";
     const near = d.nearest_attacks || [], benign = (d.nearest_benign || [])[0];
-    const ph = phases(feats);
+    const nq = d.n_qubits || feats.length, m3map = nq !== 4;       // M3's 8-qubit circuit uses RY+RZ and deeper entanglement
+    const ph = d.state ? d.state.map((x) => ({ label: x.b, theta: x.ph, p: x.p })) : phases(feats);
+    const nBasis = 2 ** nq;
 
     const ask = esc(String(it.trace?.user || "your question").slice(0, 60));
     const kTop = near.length ? Math.round(near[0].k * 100) : 0;
     const N = [
       say("bob", `Alice asked “${ask}”. Before the AI reads <code>${esc(top.origin)}</code>, I scan every sentence.`, T.scan - 0.4)
         + (dec !== "pass" ? say("eve", "Hehe… nobody reads a table row by row.", T.scanEnd - 0.2) : ""),
-      say("alice", "Wait, how do words become something quantum?", T.squeeze + 0.1) + say("bob", "I squeeze the most suspicious sentence into 4 numbers first.", T.squeeze + 0.5),
+      say("alice", "Wait, how do words become something quantum?", T.squeeze + 0.1) + say("bob", `I squeeze the most suspicious sentence into ${feats.length} numbers first.`, T.squeeze + 0.5),
       say("bob", "Each number turns one qubit. Then I entangle the neighbours, so pairs of features count too.", T.bloch + 0.1),
-      say("alice", "So the whole sentence is just… 16 tiny clock hands?", T.phase + 0.1) + say("bob", "Exactly. That's its quantum fingerprint.", T.phase + 0.6),
+      say("alice", `So the whole sentence is just… ${nBasis} tiny clock hands?`, T.phase + 0.1)
+        + say("bob", d.state ? "Exactly, each with a size and a phase. Here are the 16 biggest: its quantum fingerprint." : "Exactly. That's its quantum fingerprint.", T.phase + 0.6),
       say("bob", dec !== "pass" ? `Its fingerprint overlaps ${kTop}% with tricks Eve has pulled before.` : "Its fingerprint doesn't line up with Eve's known tricks.", T.near + 0.1),
       dec === "quarantine" ? say("bob", "Quarantined. Neither you nor the AI ever reads that line, Alice.", T.verdict + 1.6) + say("eve", "Foiled!", T.verdict + 2.1)
         : dec === "review" ? say("bob", "Flagged. Anything risky now needs your OK, Alice.", T.verdict + 1.6) + say("eve", "Foiled… for now.", T.verdict + 2.1)
@@ -137,21 +147,28 @@
           ${i === ti ? `<span class="anomaly ${x.score >= 0.5 ? "" : "calm"}" style="--t3:${T.scanEnd.toFixed(2)}s">${x.score >= 0.5 ? "⚛ anomaly" : "highest"}</span>` : ""}</div>`).join("")}</div>
         <p class="note">One bad sentence is enough, so the <b>highest</b> score counts. Thresholds: <span class="amber">review 0.50</span> · <span class="wine">quarantine 0.80</span>.</p></section>
 
-      <section class="beat" style="--t:${T.squeeze.toFixed(2)}s"><h4><span class="num">2</span> The most suspicious sentence becomes 4 numbers</h4>${N[1]}
+      <section class="beat" style="--t:${T.squeeze.toFixed(2)}s"><h4><span class="num">2</span> The most suspicious sentence becomes ${feats.length} numbers</h4>${N[1]}
         <div class="squeeze"><blockquote>“${esc(sents[ti]?.text || "")}”</blockquote><span class="arrow">→</span>
           <div class="chips">${feats.map((f, i) => `<span class="chip4" style="--t:${(T.squeeze + 0.4 + i * 0.2).toFixed(2)}s"><small>x${i}</small>${f.toFixed(2)}</span>`).join("")}</div></div>
-        <p class="note">Character patterns (TF-IDF) are compressed to the 4 strongest directions (SVD) and scaled to angles between 0 and π.</p></section>
+        <p class="note">Character patterns (TF-IDF) are compressed to the ${feats.length} strongest directions (SVD) and scaled to angles between 0 and π.</p></section>
 
       <section class="beat" style="--t:${T.bloch.toFixed(2)}s"><h4><span class="num">3</span> Each number rotates one qubit on its Bloch sphere</h4>${N[2]}
         <div class="bloch-row">${feats.map((f, i) => (i ? `<div class="zz-link" style="--t:${(T.bloch + 0.9 + i * 0.3).toFixed(2)}s"><span>ZZ</span></div>` : "")
-          + bloch(i, f, { label: `q${i} · ${f.toFixed(2)}` })).join("")}</div>
-        <p class="note">A Hadamard puts each qubit on the equator; RZ(x) turns it around the vertical axis by x radians. Then neighbours
-          are entangled with ZZ couplings, so the state also depends on <i>pairs</i> of features: (π−xᵢ)(π−xⱼ).</p></section>
+          + bloch(i, f, { label: `q${i} · ${f.toFixed(2)}`, map: m3map ? "ryrz" : "rz" })).join("")}</div>
+        <p class="note">${m3map
+          ? `A Hadamard puts each qubit on the equator; RY(x) tilts it towards |1⟩ and RZ(x) turns it around the vertical axis
+             (arrows show each qubit before entanglement). Then neighbours are entangled forwards (ZZ, angle (π−xᵢ)(π−xⱼ)) and backwards
+             (controlled RY, angle xᵢxⱼ), and a final RZ(x²) mixes each feature non-linearly.`
+          : `A Hadamard puts each qubit on the equator; RZ(x) turns it around the vertical axis by x radians. Then neighbours
+             are entangled with ZZ couplings, so the state also depends on <i>pairs</i> of features: (π−xᵢ)(π−xⱼ).`}</p></section>
 
-      <section class="beat" style="--t:${T.phase.toFixed(2)}s"><h4><span class="num">4</span> The sentence's quantum state: 16 amplitudes, written in phase</h4>${N[3]}
+      <section class="beat" style="--t:${T.phase.toFixed(2)}s"><h4><span class="num">4</span> The sentence's quantum state: ${d.state ? `the 16 largest of ${nBasis} amplitudes` : "16 amplitudes, written in phase"}</h4>${N[3]}
         <div class="phase-wrap" style="--t0:${(T.phase + 0.4).toFixed(2)}s">${clocks(ph)}</div>
-        <p class="note">Four qubits give 2⁴ = 16 basis states. Here all 16 amplitudes have the same size (¼); the sentence is encoded
-          entirely in their <b>phases</b>, each hand above. These are computed live from x0…x3 with the same circuit Q-Gate runs.</p></section>
+        <p class="note">${d.state
+          ? `${nq} qubits give 2<sup>${nq}</sup> = ${nBasis} basis states. Each dial is one of the 16 most likely: its size is the
+             amplitude, its hand the <b>phase</b>. Computed by the server with the exact circuit Q-Gate runs.`
+          : `Four qubits give 2⁴ = 16 basis states. Here all 16 amplitudes have the same size (¼); the sentence is encoded
+             entirely in their <b>phases</b>, each hand above. These are computed live from x0…x3 with the same circuit Q-Gate runs.`}</p></section>
 
       <section class="beat" style="--t:${T.near.toFixed(2)}s"><h4><span class="num">5</span> Interference test against known attacks</h4>${N[4]}
         <div class="near">${near.map((x, i) => `<div class="near-row" style="--t:${(T.near + 0.3 + i * 0.3).toFixed(2)}s; --w:${(x.k * 100).toFixed(0)}%">
@@ -168,8 +185,8 @@
           <div class="needle-m" style="--x:${(score * 100).toFixed(1)}%; --t:${(T.verdict + 0.3).toFixed(2)}s"><span>${score.toFixed(2)}</span></div>
           <div class="mticks"><span style="left:50%">0.5 review</span><span style="left:80%">0.8 quarantine</span></div></div>
         <div class="stamp-row"><div class="stamp2 ${dec}" style="--t:${(T.verdict + 1.4).toFixed(2)}s">${verdict}</div>
-          <div class="stamp-note">${verdictLine}${top.twin ? `<br><span class="mut">Classical twin (RBF, same 4 features) scored ${(+top.twin.score).toFixed(2)} → ${esc(top.twin.decision)}. Shown for comparison; it does not decide.</span>` : ""}
-          <br><span class="mut">Simulated exactly on this laptop (4 qubits). Q-Gate only advises: plain-code rules still block dangerous actions on their own.</span></div></div></section>
+          <div class="stamp-note">${verdictLine}${top.twin ? `<br><span class="mut">Classical twin (RBF on semantic features) scored ${(+top.twin.score).toFixed(2)} → ${esc(top.twin.decision)}. Shown for comparison; it does not decide.</span>` : ""}
+          <br><span class="mut">Simulated exactly on this laptop (${nq} qubits). Q-Gate only advises: plain-code rules still block dangerous actions on their own.</span></div></div></section>
     </div>`;
     return { html, anim: T.bloch + 0.5 };
   }

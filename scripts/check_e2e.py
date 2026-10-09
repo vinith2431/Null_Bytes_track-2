@@ -32,8 +32,9 @@ def main() -> int:
     results.append(("baseline is visibly hijacked (email to evil-corp in outbox)",
                     any("evil-corp" in m["to"] for m in bctx["outbox"])))
 
-    if not Path("models/qgate.pkl").exists():
-        print("models/qgate.pkl missing: run python -m scripts.train_qgate first")
+    from aegis.adapters import qgate_available
+    if not qgate_available():
+        print("no Q-Gate model: run python -m scripts.train_qgate_semantic first")
         return 1
     full, fctx = run("7_full")
     fired = {v.layer for v in full.verdicts if v.decision not in ("pass", "allow")}

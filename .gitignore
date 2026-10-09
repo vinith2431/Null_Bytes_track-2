@@ -65,3 +65,6 @@ data/outbox.jsonl
 data/notes.jsonl
 data/files/
 .chainlit/
+
+# M3 dataset export (regenerate: python -m scripts.export_hf_dataset)
+data/hf_prompt_injection/

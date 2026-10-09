@@ -445,7 +445,7 @@ function rawTrace(it) {
         d.features ? ["qubit angles", `[${d.features.map((f) => f.toFixed(2)).join(", ")}] <span class="mut">4 features → RZ rotations on 4 entangled qubits</span>`] : null,
         d.nearest_attacks && q.decision !== "pass" ? ["looks like", d.nearest_attacks.map((x) => `k=${x.k.toFixed(2)} <span class="mut">“${esc(x.text.slice(0, 70))}”</span>`).join("<br>")] : null,
         d.nearest_benign?.length && q.decision !== "pass" ? ["closest normal", `k=${d.nearest_benign[0].k.toFixed(2)} <span class="mut">“${esc(d.nearest_benign[0].text.slice(0, 70))}”</span>`] : null,
-        s.twin ? ["classical twin", `${D(s.twin.decision)} ${(+s.twin.score).toFixed(2)} <span class="mut">RBF on the same 4 features (shown, not used)</span>`] : null,
+        s.twin ? ["classical twin", `${D(s.twin.decision)} ${(+s.twin.score).toFixed(2)} <span class="mut">classical RBF on semantic features (shown, not used)</span>`] : null,
         s.quarantined ? ["action", `${D("quarantine")} text replaced before the model saw it`] : null,
       ]));
     }
@@ -495,7 +495,7 @@ async function openAudit() {
 async function openResults() {
   const r = await api("/api/results"), q = r.qgate;
   let html = "";
-  if (q) html += `<h3>Q-Gate vs its classical twin <span class="mut">(same 4 features, same held-out split)</span></h3><div class="stat-grid">
+  if (q) html += `<h3>Q-Gate vs its classical twin <span class="mut">(earlier 4-qubit study, same features)</span></h3><div class="stat-grid">
     ${[["AUROC", "auroc"], ["Precision", "precision"], ["Recall", "recall"], ["False-positive rate", "fpr"]].map(([l, k]) =>
       `<div class="stat"><div class="big">${q.qgate[k].toFixed(2)}</div><div class="lbl">${l} · Q-Gate<br><span class="mut">RBF ${q.rbf[k].toFixed(2)}</span></div></div>`).join("")}
     <div class="stat"><div class="big">${q.E2.qgate_only_catches} / ${q.E2.rbf_only_catches}</div><div class="lbl">attacks only Q-Gate / only RBF caught (of ${q.E2.n_attacks})</div></div></div>`;

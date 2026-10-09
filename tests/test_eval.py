@@ -97,6 +97,7 @@ def test_evaluation_metrics_and_audit(tmp_path):
 
 def test_missing_qgate_model_fails_fast(monkeypatch, tmp_path):
     monkeypatch.setattr(evaluator, "QGATE_MODEL", tmp_path / "nope.pkl")
+    monkeypatch.setattr(evaluator, "FINAL_QGATE", tmp_path / "nope.joblib")
     with pytest.raises(RuntimeError, match="qgate"):
         evaluator.evaluate(cases(*SIMPLE), "7_full", workers=1)
 
