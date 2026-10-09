@@ -24,8 +24,8 @@ class RBFBaseline:
     def _validate_features(X):
         X = np.asarray(X, dtype=float)
 
-        if X.ndim != 2 or X.shape[1] != 4:
-            raise ValueError("Features must have shape (n_samples, 4).")
+        if X.ndim != 2 or X.shape[1] != 8:
+            raise ValueError("Features must have shape (n_samples, 8).")
 
         if not np.all(np.isfinite(X)):
             raise ValueError("Features must contain only finite values.")

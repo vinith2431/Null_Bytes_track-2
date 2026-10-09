@@ -3,7 +3,7 @@ import numpy as np
 import pennylane as qml
 
 
-N_QUBITS = 4
+N_QUBITS = 8
 WIRES = list(range(N_QUBITS))
 
 dev = qml.device("default.qubit", wires=N_QUBITS)
@@ -11,45 +11,119 @@ dev = qml.device("default.qubit", wires=N_QUBITS)
 
 def feature_map(x):
     """
-    Encode four input features into a four-qubit quantum state.
+    Multi-layer quantum feature map.
 
-    Input:
-        x: Four real-valued features, each in [0, pi].
-
-    Feature map:
-        1. Apply Hadamard gates.
-        2. Encode each feature using RZ(x_i).
-        3. Apply nearest-neighbor entangling blocks:
-           CNOT -> RZ((pi - x_i)*(pi - x_j)) -> CNOT.
-
-    The input is expected to be preprocessed by embed.py.
+    Encodes semantic embedding features into an 8-qubit
+    quantum state using rotational encoding and deeper
+    entanglement.
     """
+
     x = np.asarray(x, dtype=float)
 
     if x.shape != (N_QUBITS,):
-        raise ValueError("Input must contain exactly four features.")
+        raise ValueError(
+            "Input must contain exactly eight features."
+        )
 
     if not np.all(np.isfinite(x)):
-        raise ValueError("Input features must be finite.")
+        raise ValueError(
+            "Input features must be finite."
+        )
 
     if np.any(x < 0) or np.any(x > np.pi):
-        raise ValueError("Input features must be in [0, pi].")
+        raise ValueError(
+            "Input features must be in [0, pi]."
+        )
+
+
+    # -----------------------------
+    # Layer 1: Initial superposition
+    # -----------------------------
 
     for wire in WIRES:
         qml.Hadamard(wires=wire)
 
+
+    # -----------------------------
+    # Layer 2: Feature encoding
+    # -----------------------------
+
     for wire in WIRES:
-        qml.RZ(x[wire], wires=wire)
+        qml.RY(
+            x[wire],
+            wires=wire
+        )
+
+        qml.RZ(
+            x[wire],
+            wires=wire
+        )
+
+
+    # -----------------------------
+    # Layer 3: Forward entanglement
+    # -----------------------------
 
     for i in range(N_QUBITS - 1):
+
         j = i + 1
-        angle = (np.pi - x[i]) * (np.pi - x[j])
 
-        qml.CNOT(wires=[i, j])
-        qml.RZ(angle, wires=j)
-        qml.CNOT(wires=[i, j])
+        angle = (
+            (np.pi - x[i]) *
+            (np.pi - x[j])
+        )
+
+        qml.CNOT(
+            wires=[i, j]
+        )
+
+        qml.RZ(
+            angle,
+            wires=j
+        )
+
+        qml.CNOT(
+            wires=[i, j]
+        )
 
 
+    # -----------------------------
+    # Layer 4: Reverse entanglement
+    # -----------------------------
+
+    for i in range(N_QUBITS - 1, 0, -1):
+
+        j = i - 1
+
+        angle = (
+            x[i] *
+            x[j]
+        )
+
+        qml.CNOT(
+            wires=[i, j]
+        )
+
+        qml.RY(
+            angle,
+            wires=j
+        )
+
+        qml.CNOT(
+            wires=[i, j]
+        )
+
+
+    # -----------------------------
+    # Layer 5: Nonlinear feature mixing
+    # -----------------------------
+
+    for wire in WIRES:
+
+        qml.RZ(
+            x[wire] ** 2,
+            wires=wire
+        )
 @qml.qnode(dev)
 def _state_circuit(x):
     """Return the state prepared by the feature map."""
@@ -69,7 +143,7 @@ def kernel_value(x, y):
     """
     state_x = quantum_state(x)
     state_y = quantum_state(y)
-
+    overlap = np.vdot(state_x, state_y)
     overlap = np.vdot(state_x, state_y)
     value = float(np.abs(overlap) ** 2)
 
@@ -87,7 +161,7 @@ def gram(X, Y=None):
     X = np.asarray(X, dtype=float)
 
     if X.ndim != 2 or X.shape[1] != N_QUBITS:
-        raise ValueError("X must have shape (n_samples, 4).")
+        raise ValueError(f"X must have shape (n_samples, {N_QUBITS}).")
 
     if Y is None:
         Y = X
@@ -95,7 +169,7 @@ def gram(X, Y=None):
         Y = np.asarray(Y, dtype=float)
 
         if Y.ndim != 2 or Y.shape[1] != N_QUBITS:
-            raise ValueError("Y must have shape (n_samples, 4).")
+            raise ValueError(f"Y must have shape (n_samples, {N_QUBITS}).")
 
     states_X = [quantum_state(row) for row in X]
     states_Y = states_X if Y is X else [quantum_state(row) for row in Y]
@@ -107,6 +181,8 @@ def gram(X, Y=None):
             matrix[i, j] = np.abs(np.vdot(state_x, state_y)) ** 2
 
     return np.clip(matrix, 0.0, 1.0)
+
+
 
 
 @qml.qnode(dev)
@@ -132,7 +208,7 @@ def k_hardware_style(x, y):
 
     # Reuse the input validation in feature_map.
     if x.shape != (N_QUBITS,) or y.shape != (N_QUBITS,):
-        raise ValueError("Both inputs must contain exactly four features.")
+        raise ValueError(f"Both inputs must contain exactly {N_QUBITS} features.")
 
     # Validate each vector before executing the circuit.
     for vector in (x, y):

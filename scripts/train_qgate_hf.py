@@ -18,7 +18,19 @@ DATA = ROOT / "data" / "hf_prompt_injection"
 MODELS = ROOT / "models"
 RESULTS = ROOT / "results"
 
-QGATE_TRAIN_SIZE = 256
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument(
+    "--qgate-size",
+    type=int,
+    default=256,
+    help="Number of training samples used for Q-Gate"
+)
+
+args = parser.parse_args()
+
+QGATE_TRAIN_SIZE = args.qgate_size
 RANDOM_STATE = 42
 
 
@@ -80,12 +92,15 @@ def main():
 
     # ----- Q-Gate: reproducible stratified training subset -----
     print("\n[2/4] Selecting Q-Gate training subset...")
-    q_indices, _ = train_test_split(
-        np.arange(len(train)),
-        train_size=QGATE_TRAIN_SIZE,
-        stratify=y_train,
-        random_state=RANDOM_STATE,
-    )
+    if QGATE_TRAIN_SIZE >= len(train_texts):
+        q_indices = np.arange(len(train_texts))
+    else:
+        q_indices, _ = train_test_split(
+            np.arange(len(train_texts)),
+            train_size=QGATE_TRAIN_SIZE,
+            stratify=y_train,
+            random_state=42,
+        )
 
     q_texts = [train_texts[i] for i in q_indices]
     y_q = y_train[q_indices]
@@ -138,11 +153,11 @@ def main():
         ),
     }
 
-    output = RESULTS / "qgate_hf_training.json"
-    output.write_text(json.dumps(report, indent=2), encoding="utf-8")
+    output_file = RESULTS / f"qgate_hf_training_{QGATE_TRAIN_SIZE}.json"
+    output_file.write_text(json.dumps(report, indent=2), encoding="utf-8")
 
     print("\n[4/4] Training complete.")
-    print(f"Saved report: {output}")
+    print(f"Saved report: {output_file}")
     print("Test split has not been evaluated.")
 
 

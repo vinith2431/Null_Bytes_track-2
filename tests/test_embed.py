@@ -23,7 +23,7 @@ def test_embedding_shape_and_range():
     embedder = TextEmbedder()
     features = embedder.fit_transform(TRAINING_TEXTS)
 
-    assert features.shape == (10, 4)
+    assert features.shape == (10, 8)
     assert np.all(np.isfinite(features))
     assert np.all(features >= 0.0)
     assert np.all(features <= np.pi)
@@ -33,7 +33,7 @@ def test_transform_single_text():
     embedder = TextEmbedder().fit(TRAINING_TEXTS)
     features = embedder.transform(["Please summarize the report."])
 
-    assert features.shape == (1, 4)
+    assert features.shape == (1, 8)
 
 
 def test_transform_requires_fit():

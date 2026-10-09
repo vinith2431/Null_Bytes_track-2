@@ -18,7 +18,7 @@ from aegis.qgate.detector import QGate
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DATA_FILE = ROOT / "data" / "qgate_dataset.csv"
+DATA_FILE = ROOT / "data" / "hf_prompt_injection"
 MODEL_DIR = ROOT / "models"
 RESULTS_DIR = ROOT / "results"
 
@@ -26,11 +26,14 @@ THRESHOLDS = [0.3, 0.4, 0.5, 0.6, 0.7]
 
 
 def load_test_data():
-    with DATA_FILE.open("r", encoding="utf-8", newline="") as f:
-        rows = [
-            row for row in csv.DictReader(f)
-            if row["split"] == "test"
-        ]
+    test_file = DATA_FILE / "test.csv"
+
+    with test_file.open(
+        "r",
+        encoding="utf-8",
+        newline=""
+    ) as f:
+        rows = list(csv.DictReader(f))
 
     if not rows:
         raise ValueError("No test examples found.")
