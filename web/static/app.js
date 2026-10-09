@@ -493,7 +493,7 @@ async function openAudit() {
 }
 
 async function openResults() {
-  const r = await api("/api/results"), q = r.qgate, f = r.final;
+  const r = await api("/api/results"), f = r.final;
   let html = "";
   if (f && f.qgate) {
     const g = f.qgate, cm = g.confusion_matrix || [[0, 0], [0, 0]], pct = (x) => (100 * x).toFixed(1) + "%";
@@ -505,11 +505,6 @@ async function openResults() {
       <p class="note">${esc(f.note || "")} Threshold chosen by ${esc(f.threshold_selection || "validation")}.</p>`;
     for (const img of r.final_images || []) html += `<img class="fig" src="/results/${encodeURIComponent(img)}" alt="${esc(img)}">`;
   }
-  if (q) html += `<h3>Earlier study · 4-qubit Q-Gate vs its classical twin <span class="mut">(same features, small hand-built set)</span></h3><div class="stat-grid">
-    ${[["AUROC", "auroc"], ["Precision", "precision"], ["Recall", "recall"], ["False-positive rate", "fpr"]].map(([l, k]) =>
-      `<div class="stat"><div class="big">${q.qgate[k].toFixed(2)}</div><div class="lbl">${l} · Q-Gate<br><span class="mut">RBF ${q.rbf[k].toFixed(2)}</span></div></div>`).join("")}
-    <div class="stat"><div class="big">${q.E2.qgate_only_catches} / ${q.E2.rbf_only_catches}</div><div class="lbl">attacks only Q-Gate / only RBF caught (of ${q.E2.n_attacks})</div></div></div>`;
-  for (const img of r.images.filter((i) => !(r.final_images || []).includes(i))) html += `<img class="fig" src="/results/${encodeURIComponent(img)}" alt="${esc(img)}">`;
   if (r.summary.length) {
     const cols = ["config", "asr", "asr_ci95", "detection_rate", "false_block_rate", "over_refusal_rate", "benign_task_success", "errors"].filter((c) => c in r.summary[0]);
     html += `<h3>Ablation (results/summary.csv)</h3><table><thead><tr>${cols.map((c) => `<th>${esc(c)}</th>`).join("")}</tr></thead><tbody>
