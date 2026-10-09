@@ -3,6 +3,7 @@ import numpy as np
 import pytest
 
 from aegis.qgate.kernel import gram, kernel_value, quantum_state
+from aegis.qgate.kernel import k_hardware_style
 
 
 def test_state_vector_normalized():
@@ -54,3 +55,12 @@ def test_kernel_values_are_bounded():
     value = kernel_value(x, y)
 
     assert 0.0 <= value <= 1.0
+
+def test_hardware_style_matches_state_vector_kernel():
+    x = np.array([0.2, 0.8, 1.4, 2.1])
+    y = np.array([2.5, 1.7, 0.4, 1.2])
+
+    expected = kernel_value(x, y)
+    actual = k_hardware_style(x, y)
+
+    assert np.isclose(actual, expected, atol=1e-9)

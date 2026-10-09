@@ -109,11 +109,37 @@ def gram(X, Y=None):
     return np.clip(matrix, 0.0, 1.0)
 
 
+@qml.qnode(dev)
+def _overlap_circuit(x, y):
+    """Compute the overlap using U(y)† U(x) and return all-zero probability."""
+    feature_map(x)
+    qml.adjoint(feature_map)(y)
+    return qml.probs(wires=WIRES)
+
+
 def k_hardware_style(x, y):
     """
-    Compute the same kernel using a direct overlap-style calculation.
+    Independently calculate the fidelity kernel using an overlap circuit.
 
-    This serves as an independent implementation for testing the
-    state-vector kernel calculation.
+    For normalized pure states:
+        K(x, y) = |<phi(y)|phi(x)>|^2
+
+    Applying U(y)† after U(x) makes the all-zero probability
+    equal to the squared state overlap.
     """
-    return kernel_value(x, y)
+    x = np.asarray(x, dtype=float)
+    y = np.asarray(y, dtype=float)
+
+    # Reuse the input validation in feature_map.
+    if x.shape != (N_QUBITS,) or y.shape != (N_QUBITS,):
+        raise ValueError("Both inputs must contain exactly four features.")
+
+    # Validate each vector before executing the circuit.
+    for vector in (x, y):
+        if not np.all(np.isfinite(vector)):
+            raise ValueError("Input features must be finite.")
+        if np.any(vector < 0) or np.any(vector > np.pi):
+            raise ValueError("Input features must be in [0, pi].")
+
+    probabilities = np.asarray(_overlap_circuit(x, y), dtype=float)
+    return float(np.clip(probabilities[0], 0.0, 1.0))
