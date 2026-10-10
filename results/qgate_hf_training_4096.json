@@ -7,15 +7,42 @@
   "threshold_selection": "maximum F1 on validation split",
   "qgate": {
     "training_samples": 4096,
-    "test_f1": 0.9420,
+    "test_f1": 0.942,
     "accuracy": 0.9321,
-    "precision": 0.9420,
-    "recall": 0.9420,
+    "precision": 0.942,
+    "recall": 0.942,
     "roc_auc": 0.9785,
     "false_positives": 32,
     "false_negatives": 32,
-    "confusion_matrix": [[358, 32], [32, 520]]
+    "confusion_matrix": [
+      [
+        358,
+        32
+      ],
+      [
+        32,
+        520
+      ]
+    ]
   },
   "source": "M3 (Krishna) 4,096-sample run, reported from his machine; the model file is not in this repo",
-  "note": "Test split evaluated using threshold selected from validation split."
+  "note": "Test split evaluated using threshold selected from validation split.",
+  "rbf_baseline": {
+    "threshold": 0.6060574076713694,
+    "accuracy": 0.9309978768577495,
+    "precision": 0.9655831739961759,
+    "recall": 0.9148550724637681,
+    "f1": 0.9395348837209302,
+    "roc_auc": 0.9804301374953549,
+    "confusion_matrix": [
+      [
+        372,
+        18
+      ],
+      [
+        47,
+        505
+      ]
+    ]
+  }
 }
