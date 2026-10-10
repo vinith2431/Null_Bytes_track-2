@@ -243,6 +243,7 @@ def results():
     pngs = sorted(p.name for p in rd.glob("*.png")) if rd.exists() else []
     out["images"] = [f for f in final_figs if f in pngs] + [f for f in pngs if f not in final_figs]
     out["final_images"] = [f for f in final_figs if f in pngs]
+    out["version"] = int(max((p.stat().st_mtime for p in rd.glob("*.png")), default=0))   # cache-buster for <img>
     return out
 
 
