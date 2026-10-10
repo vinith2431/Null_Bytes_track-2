@@ -505,7 +505,7 @@ async function openResults() {
         `<div class="stat"><div class="big">${v}</div><div class="lbl">${l}</div></div>`).join("")}
       </div>
       <p class="note">${esc(f.note || "")} Threshold chosen by ${esc(f.threshold_selection || "validation")}.</p>`;
-    for (const img of r.final_images || []) html += `<img class="fig" src="/results/${encodeURIComponent(img)}" alt="${esc(img)}">`;
+    for (const img of r.final_images || []) html += `<img class="fig" src="/results/${encodeURIComponent(img)}?v=${r.version || 0}" alt="${esc(img)}">`;
   }
   if (r.summary.length) {
     const cols = ["config", "asr", "asr_ci95", "detection_rate", "false_block_rate", "over_refusal_rate", "benign_task_success", "errors"].filter((c) => c in r.summary[0]);
