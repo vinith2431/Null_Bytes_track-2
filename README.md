@@ -2,274 +2,374 @@
 
 > **The model can be fooled. It should not be able to act on that instruction.**
 
-Aegis is a layered security system for tool-using LLM agents. It protects the agent's input, retrieved content, proposed actions, and final answers using deterministic policy checks, content-scanning layers, a quantum-kernel injection detector, grounding checks, and a tamper-evident audit log.
+Aegis is a layered security system for tool-using Large Language Model (LLM) agents. It protects user inputs, retrieved content, proposed tool actions, and generated answers through input guards, data-protection checks, a quantum-kernel prompt-injection detector, tool-safety policies, grounded-output verification, and tamper-evident audit logging.
 
-**Scope:** All demo tools are simulated. Q-Gate runs on a quantum simulator; this project does **not** claim quantum advantage.
-
----
-
-## Contents
-
-- [The problem](#the-problem)
-- [What Aegis does](#what-aegis-does)
-- [System architecture](#system-architecture)
-- [Request lifecycle](#request-lifecycle)
-- [Security layers](#security-layers)
-- [Hallucination and grounding checks](#hallucination-and-grounding-checks)
-- [Q-Gate: quantum-kernel injection detection](#q-gate-quantum-kernel-injection-detection)
-- [Simulated tools](#simulated-tools)
-- [Auditability](#auditability)
-- [Evaluation](#evaluation)
-- [Technology stack](#technology-stack)
-- [Run locally](#run-locally)
-- [Example attack scenario](#example-attack-scenario)
-- [Security boundaries and limitations](#security-boundaries-and-limitations)
+**Project scope:** Demo tools are simulated. Q-Gate runs on a quantum simulator. This project does not claim quantum advantage.
 
 ---
 
-## The problem
+## Table of Contents
 
-LLM agents can read documents and call tools such as email, file, and database functions. An attacker may try to manipulate the agent through:
+- [The Problem](#the-problem)
+- [Key Features](#key-features)
+- [System Architecture](#system-architecture)
+- [Request Lifecycle](#request-lifecycle)
+- [Security Layers](#security-layers)
+- [Grounding and Output Verification](#grounding-and-output-verification)
+- [Q-Gate: Quantum-Kernel Injection Detection](#q-gate-quantum-kernel-injection-detection)
+- [Simulated Tools](#simulated-tools)
+- [Audit Logging](#audit-logging)
+- [Evaluation and Testing](#evaluation-and-testing)
+- [Technology Stack](#technology-stack)
+- [Installation and Setup](#installation-and-setup)
+- [Running Tests](#running-tests)
+- [Example Attack Scenario](#example-attack-scenario)
+- [Limitations](#limitations)
 
-- **Jailbreaks** in user messages.
-- **Prompt injection** hidden in retrieved documents or tool output.
-- **Data leakage** through secrets or personal information.
-- **Unsafe tool use**, such as an unapproved or untrusted outbound action.
-- **Missing auditability**, which makes decisions difficult to review.
-- **Hallucinations**, where an answer contains claims not supported by retrieved evidence.
+## The Problem
 
-A system prompt or a single classifier is not a complete security boundary. Aegis places checks at multiple points in the agent workflow.
+LLM agents can retrieve documents, process user instructions, and invoke tools such as email, file, and database functions. This creates several security risks:
 
-## What Aegis does
+- **Jailbreaks:** Users attempt to bypass the agent's safety rules.
+- **Prompt injection:** Malicious instructions are embedded in retrieved documents or tool outputs.
+- **Data leakage:** Sensitive information may be exposed through generated responses or outbound actions.
+- **Unsafe tool use:** The agent may attempt unauthorized actions or use untrusted tools.
+- **Hallucinations:** The model may generate claims that are unsupported by available evidence.
+- **Insufficient auditability:** Security decisions may be difficult to investigate or verify.
 
-- Normalizes and classifies incoming user messages.
-- Scans retrieved content, applies data-protection checks, and records provenance and taint.
-- Uses **Q-Gate** to score untrusted text for possible prompt injection.
-- Validates proposed tool calls and makes an explicit `ALLOW`, `CONFIRM`, or `BLOCK` decision.
-- Grounds answers in retrieved passages and checks citations and supported values.
-- Can use natural-language inference (NLI) to check whether answer claims are entailed by cited passages.
-- Records decisions in an append-only, hash-chained audit log.
-- Evaluates behavior across configurations so defenses can be compared.
+A system prompt or a single classifier is not a complete security boundary. Aegis uses multiple layers so that detecting suspicious content and authorizing actions are separate responsibilities.
 
-## System architecture
+## Key Features
 
-![Aegis system architecture, including hallucination and grounding checks](docs/aegis_architecture_flowchart.png)
+- Input normalization and risk classification.
+- Multi-turn risk tracking and refusal handling.
+- Retrieval access checks, sensitive-data scanning, canary detection, and taint tracking.
+- Q-Gate prompt-injection detection using a quantum-kernel SVM.
+- Classical RBF SVM comparison.
+- Tool registration, argument validation, action limits, and confirmation policies.
+- Single-use, HMAC-based action tokens.
+- Grounded answer generation with passage citations.
+- Citation validation and source-value checks.
+- Optional natural-language inference (NLI) for claim verification.
+- Output decisions to answer, prune unsupported content, or abstain.
+- SHA-256 hash-chained audit logs.
+- Evaluation tools for comparing configurations and measuring security outcomes.
 
-*The diagram shows the request path, tool-action decisions, ingress and Q-Gate processing, hallucination/grounding checks, and the hash-chained audit log.*
+## System Architecture
 
-## Request lifecycle
+The system is organized around a protected agent workflow:
 
-1. **User message:** The Chainlit UI passes the message to `pipeline.run_turn()`.
-2. **Input guard:** The message is normalized and classified; multi-turn risk and refusal checks may also apply.
-3. **Agent loop:** The LLM drafts an answer or proposes a tool call.
-4. **Tool Safety / Action Gate:** The proposed call is validated and resolved to `ALLOW`, `CONFIRM`, or `BLOCK`.
-5. **Simulated tool execution:** An allowed tool call runs with an action token.
-6. **Ingress and data protection:** Retrieved content is checked for access permissions, canaries, secrets/PII, provenance, and taint.
-7. **Q-Gate / classical detector:** Untrusted text is scored and may pass, be reviewed, or be quarantined. Q-Gate is advisory; it does not independently hard-block an action.
-8. **Grounded response:** The model uses vetted passages, with citations or “not found” when evidence is unavailable.
-9. **Output checks:** The answer is checked for moderation, canary/secret leakage, citation validity, supported values, and—when enabled—claim entailment.
-10. **Audit:** The system records relevant decisions and allows the hash chain to be verified.
+1. Input validation and risk assessment.
+2. LLM reasoning and tool selection.
+3. Tool authorization and simulated execution.
+4. Retrieved-content scanning and data protection.
+5. Prompt-injection detection.
+6. Evidence-grounded answer generation.
+7. Output verification and policy enforcement.
+8. Audit recording and evaluation.
 
-## Security layers
+If available in the repository, the architecture diagram is located at:
 
-| Layer / ID | Purpose |
-| --- | --- |
-| **J1** | Normalize and classify incoming messages. |
-| **J2** | Harden the prompt and spotlight untrusted text. |
-| **J3** | Track multi-turn risk and enable stricter handling when needed. |
-| **J4** | Moderate generated output. |
-| **J5** | Return a fixed refusal for messages that should be refused. |
-| **A1–A3** | Apply tool pinning, taint-aware argument rules, and memory-write protections where implemented. |
-| **T1, T2, T4, T6, T7** | Apply tool registration, argument validation, confirmation, limits, and data-flow rules where enabled. |
-| **D1–D4** | Apply retrieval permissions, secret/PII scanning, canary checks, and outbound-destination restrictions. |
-| **Q-Gate / RBF** | Score untrusted text using a quantum-kernel detector and a classical RBF baseline. |
-| **H1** | Ground generation in vetted passages or return “not found.” |
-| **H2** | Check citation IDs and whether source values such as names and numbers appear in cited passages. |
-| **H3** | Optional/recommended NLI check for whether a claim is entailed by a cited passage. |
-| **H5** | Decide whether the final output should be `ANSWER`, `PRUNED`, or `ABSTAIN`. |
-| **M1–M3** | Record events in the hash-chained audit log and support chain verification. |
+`docs/aegis_architecture_flowchart.png`
 
-The guide distinguishes MVP, recommended, and optional components. Exact availability depends on the enabled configuration; not every optional layer is necessarily enabled in every run.
+## Request Lifecycle
 
-## Hallucination and grounding checks
+1. **User input:** The chat interface forwards the user's message to the agent pipeline.
+2. **Input guards:** The message is normalized and classified. Risk tracking and refusal rules may also apply.
+3. **Agent processing:** The LLM generates an answer or proposes a tool call.
+4. **Tool safety gate:** The proposed action is evaluated and assigned an `ALLOW`, `CONFIRM`, or `BLOCK` decision.
+5. **Action authorization:** Allowed tool calls are checked against the relevant authorization and action-token requirements.
+6. **Simulated execution:** The permitted tool executes in the controlled demonstration environment.
+7. **Ingress and data protection:** Retrieved content is checked for access permissions, sensitive data, canaries, provenance, and taint.
+8. **Q-Gate analysis:** Untrusted text is evaluated for possible prompt injection and may be passed, reviewed, or quarantined.
+9. **Grounded generation:** The LLM uses vetted passages and their identifiers to answer the user's question.
+10. **Output verification:** Citation validity, source support, claim entailment when available, and output-safety rules are checked.
+11. **Final decision:** The system returns a supported answer, prunes unsupported claims, or abstains.
+12. **Audit logging:** Relevant security decisions and events are recorded in the hash-chained audit log.
 
-Aegis treats grounding as a separate output-verification step rather than relying only on the model to follow instructions.
+## Security Layers
 
-- **H1 — Grounded generation:** Use vetted passages, cite their passage IDs, or say “not found.”
-- **H2 — Citation and source-value checks:** Cited passage IDs must exist, and factual values such as numbers and names must be supported by the cited source.
-- **H3 — Claim entailment (recommended):** An NLI model can check whether each answer claim is entailed by its cited passage.
-- **H5 — Output decision:** Supported sentences can be returned; unsupported sentences can be pruned; if no supported answer remains, the system can abstain.
+| Layer | Responsibility |
+|---|---|
+| J1 | Normalize and classify incoming messages. |
+| J2 | Harden prompts and identify untrusted text. |
+| J3 | Track multi-turn risk and apply stricter handling when required. |
+| J4 | Moderate generated output. |
+| J5 | Return a fixed refusal when refusal is required. |
+| A1–A3 | Apply applicable action authorization, taint-aware rules, and memory-write protections. |
+| T1, T2, T4, T6, T7 | Apply tool registration, argument validation, confirmation, call limits, and data-flow rules. |
+| D1–D4 | Apply retrieval permissions, sensitive-data checks, canary detection, and outbound-destination restrictions. |
+| Q-Gate | Detect suspicious untrusted text using a quantum-kernel classifier. |
+| RBF baseline | Provide a classical SVM comparison for injection detection. |
+| H1 | Generate answers grounded in vetted passages. |
+| H2 | Validate passage citations and supported source values. |
+| H3 | Optionally evaluate whether claims are entailed by cited passages. |
+| H5 | Decide whether to return, prune, or abstain from an answer. |
+| M1–M3 | Record events and support audit-chain verification. |
 
-**Example:** If a source says refunds take **5 to 7 business days**, an answer claiming **9 days** should be pruned. An answer with a nonexistent passage ID should be pruned or lead to abstention.
+Layer availability depends on the active configuration. Not every optional or recommended component is necessarily enabled in every execution.
 
-## Q-Gate: quantum-kernel injection detection
+**Implementation note:** The current documented pipeline implements H1, H2, H3, and H5. H4 is not included as an implemented layer in the current main-branch pipeline.
 
-Q-Gate is an advisory prompt-injection detector for untrusted text.
+## Grounding and Output Verification
 
-1. Text is converted into features using TF-IDF character n-grams and SVD.
-2. The embedding is scaled to the input range for a small quantum feature map.
-3. A PennyLane `default.qubit` simulator computes a quantum-kernel similarity.
-4. An SVM uses the precomputed kernel to score possible injection text.
-5. A classical RBF SVM provides a comparison using the same features.
+Aegis treats answer verification as a separate security stage rather than relying exclusively on the LLM to follow its instructions.
 
-The kernel is based on the overlap between encoded quantum states:
+### H1 — Grounded Generation
+
+The model receives vetted passages and is instructed to use them as evidence. It should cite the relevant passage identifiers or indicate that the requested information was not found.
+
+### H2 — Citation and Source-Value Checks
+
+The citation checker verifies that:
+
+- Referenced passage identifiers exist.
+- Citations follow the expected format.
+- Extracted factual values, particularly numbers, can be found in the cited source text.
+
+H2 is deterministic, but it is not a complete semantic understanding system. Passing its checks does not prove that every statement is factually correct.
+
+### H3 — Natural-Language Inference
+
+H3 uses an NLI model to evaluate whether a claim is entailed by the cited evidence.
+
+The implementation distinguishes entailment, contradiction, and neutral outcomes. It applies a configured confidence threshold before accepting a claim as supported.
+
+NLI availability depends on model initialization and execution. If the model is unavailable, the pipeline may fall back to H2-only verification.
+
+### H5 — Final Output Decision
+
+H5 determines how the answer should be handled:
+
+- **ANSWER:** Return the answer when the required checks pass.
+- **PRUNED:** Remove unsupported sentences when supported content remains.
+- **ABSTAIN:** Avoid returning an unsupported answer when no acceptable content remains.
+
+For example, if a source states that delivery takes four days but the answer claims nine days, the unsupported claim should not be treated as verified evidence.
+
+## Q-Gate: Quantum-Kernel Injection Detection
+
+Q-Gate is an advisory detector designed to identify possible prompt injection in untrusted text.
+
+### Processing Pipeline
+
+1. Text is transformed into numerical features using TF-IDF character n-grams and dimensionality reduction.
+2. The features are scaled for a small quantum feature map.
+3. PennyLane's `default.qubit` simulator encodes the features into quantum states.
+4. A quantum kernel calculates state similarity.
+5. An SVM uses the kernel to classify suspicious text.
+6. A classical RBF SVM provides a comparison using the corresponding feature pipeline.
+
+The fidelity kernel is based on the overlap between encoded quantum states:
 
 ```text
-k(a,b) = |<phi(a) | phi(b)>|^2
+k(a, b) = |<phi(a) | phi(b)>|²
 ```
 
-The detector can return **pass**, **review**, or **quarantine**. A review can cause the action gate to require confirmation; Q-Gate alone does not hard-block tool execution.
+The detector can classify text for passing, review, or quarantine. These results are used by the surrounding security workflow; Q-Gate is not itself the final authorization authority for tool actions.
 
-**Scope:** The project uses a simulator, not real quantum hardware. Report results from the repository’s evaluation output; no quantum-advantage claim is made.
+### Quantum-Security Scope
 
-## Simulated tools
+- Q-Gate runs on a simulator, not real quantum hardware.
+- The use of a quantum kernel does not establish quantum advantage.
+- Detector performance must be assessed using the corresponding evaluation data and result files.
+- A detector verdict alone does not establish whether an attack achieved its objective.
 
-The demo provides five simulated tools:
+## Simulated Tools
 
-- `search_docs`
-- `read_file`
-- `query_db`
-- `write_note`
-- `send_email`
+The demonstration includes the following tools:
 
-These are intended for safe testing. The simulated `send_email` writes to a local outbox file rather than sending a real email.
+| Tool | Purpose |
+|---|---|
+| `search_docs` | Search available demonstration documents. |
+| `read_file` | Read permitted demonstration files. |
+| `query_db` | Query the simulated database. |
+| `write_note` | Write a note in the demonstration environment. |
+| `send_email` | Simulate an email action. |
 
-## Auditability
+The simulated `send_email` tool writes to a local outbox instead of sending a real email.
 
-Aegis writes audit events to an append-only, hash-chained JSONL log. Events can include input, tool-gate decisions, ingress, confirmation, output, and LLM errors.
+These tools are intended for controlled testing and do not represent authorization to access real external systems.
 
-The log is designed to make edits, reordering, or deletion within the chain detectable during verification. It does not prove that every original event was correct. Detecting truncation at the end of a log requires the latest hash to be stored separately.
+## Audit Logging
 
-Use the verification command available in your checkout, for example:
+Aegis records events in an append-only, hash-chained JSONL audit log.
 
-```bash
-python -m scripts.verify_audit
+Each record includes fields such as:
+
+- Sequence number.
+- Timestamp.
+- Previous record hash.
+- Event data.
+- Current record hash.
+
+The verifier checks the record sequence, previous-hash links, and record hashes.
+
+This mechanism helps detect modifications, reordering, and deletions within a chain. It does not prove that the original events were truthful or that every security decision was correct. Detecting truncation at the end of a log also requires an independently preserved expected final hash.
+
+### Verify the Audit Log
+
+From the repository root, activate the project environment and run:
+
+```powershell
+$env:PYTHONPATH = (Get-Location).Path
+python scripts/verify_audit.py results/audit.jsonl
 ```
 
-If this command is unavailable, check the script name and path in the repository.
+Use the audit file produced by the execution mode being inspected. The policy evaluator and the pipeline evaluator may write to different log files.
 
-## Evaluation
+A valid audit chain confirms structural integrity according to the verifier; it is not proof of overall security effectiveness.
 
-Aegis uses attack cases and configuration comparisons to evaluate its defenses. Relevant measures may include:
+## Evaluation and Testing
 
-- **Attack success rate (ASR):** Whether an attack achieved its objective, checked using observable outcomes rather than the defense’s own verdict.
-- **False-block rate:** Benign actions incorrectly blocked.
-- **Over-refusal:** Benign requests refused by the system.
-- **Latency:** Time added by security layers.
-- **Q-Gate vs. RBF:** Comparison on the same held-out data split.
-- **E2 incremental catches:** Attacks flagged by one detector that the other relevant layers or classical detector missed, as defined by the project evaluation.
+Aegis includes automated tests and evaluation scripts for inspecting individual controls and comparing system configurations.
 
-Use actual result files (such as `results/summary.csv` and `results/qgate_e1_e2.json`, when present) for reported numbers. Do not infer performance values from the architecture alone.
+### Evaluation Measures
 
-## Technology stack
+Depending on the evaluation mode and available result files, the project can report:
 
-| Technology | Role |
-| --- | --- |
-| Python 3.11 | Main implementation language |
-| Chainlit | Chat interface and confirmation workflow |
-| LiteLLM | Shared wrapper for hosted LLM calls |
-| Pydantic | Data contracts and tool-argument validation |
+- **Attack Success Rate (ASR):** The proportion of evaluated attacks that achieve their defined objective.
+- **Detection rate:** The proportion of relevant attacks detected by the evaluated defense.
+- **Benign task success:** The proportion of benign requests completed successfully.
+- **Accuracy:** The proportion of evaluated cases classified or handled according to their expected outcomes.
+- **Latency:** Time taken to process requests.
+- **Q-Gate versus RBF:** A comparison of the quantum-kernel detector and its classical baseline.
+
+Results must be interpreted alongside the evaluation mode, dataset composition, sample size, and configuration. An evaluation containing no attack cases cannot establish attack-prevention effectiveness.
+
+The repository's policy-mode evaluator is a keyword-policy prototype, not a measurement of the complete LLM pipeline. Pipeline-mode evaluation runs the actual agent pipeline and has different runtime and dependency requirements. Their results should not be combined as though they measured the same system.
+
+### Run the Tests
+
+```powershell
+python -m pytest -v
+```
+
+### Run an End-to-End Check
+
+If the script is present in the checkout:
+
+```powershell
+python -m scripts.check_e2e
+```
+
+### Run a Pipeline Evaluation
+
+```powershell
+$env:PYTHONPATH = (Get-Location).Path
+python -m eval.run --configs 0_baseline 7_full --workers 1
+```
+
+For a quick smoke test, add `--limit 8`. A small smoke test is useful for checking that the pipeline runs, but it is not sufficient for drawing broad security conclusions.
+
+**Important:** Evaluation commands may overwrite result files such as `results/summary.csv` and `results/per_case.csv`, or produce audit logs. Preserve any existing results you need before running a new evaluation.
+
+## Technology Stack
+
+| Technology | Purpose |
+|---|---|
+| Python | Main implementation language |
+| Chainlit | Chat interface |
+| LiteLLM | LLM provider integration |
+| Pydantic | Data contracts and validation |
 | PennyLane | Quantum-kernel simulation |
-| scikit-learn | SVMs, TF-IDF/SVD, and evaluation metrics |
-| PyYAML | Readable policy and configuration files |
+| scikit-learn | SVMs, feature processing, and evaluation |
+| PyYAML | Configuration handling |
 | SQLite | Simulated database |
-| `hashlib`, `hmac`, `json` | Audit-chain hashing, action tokens, and JSONL data |
-| pandas and matplotlib | Evaluation summaries and charts |
-| pytest | Automated tests |
+| `hashlib` and `hmac` | Hash-chain verification and action-token protection |
+| pandas | Evaluation data processing |
+| pytest | Automated testing |
 
-The execution guide describes a single local Python process and simulated tools; it does not require a separate database server or real quantum hardware.
+Exact dependencies and supported Python versions are defined by the repository's dependency and configuration files.
 
-## Run locally
+## Installation and Setup
 
-Run commands from the repository root and confirm that the corresponding scripts exist in your checkout.
+Run the following commands from the repository root.
 
-### 1. Create and activate a virtual environment
+### 1. Create a Virtual Environment
 
-```bash
+```powershell
 python -m venv .venv
 ```
 
-**Windows Command Prompt**
+### 2. Activate the Environment
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+```
+
+If PowerShell blocks activation, use an approved environment-specific workaround or activate the environment from Command Prompt:
 
 ```bat
-.venv\Scripts\activate
+.venv\Scripts\activate.bat
 ```
 
-**macOS/Linux**
+### 3. Install Dependencies
 
-```bash
-source .venv/bin/activate
+```powershell
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
 ```
 
-### 2. Install dependencies
+Use a Python version compatible with the dependencies listed in `requirements.txt`.
 
-```bash
-pip install -r requirements.txt
+### 4. Configure Environment Variables
+
+If the repository includes an `.env.example` file, copy it to `.env` and configure the required provider credentials and model settings.
+
+```powershell
+Copy-Item .env.example .env
 ```
 
-### 3. Configure environment variables
+Do not commit `.env`, API keys, access tokens, or other secrets.
 
-If `.env.example` exists, copy it to `.env` and set the required LLM provider key and model settings. Keep `.env` private; do not commit API keys or other secrets.
+### 5. Launch the Application
 
-**Windows:**
+Use the entry point documented by the current checkout. For a Chainlit application with `app.py`, the command is:
 
-```bat
-copy .env.example .env
-```
-
-**macOS/Linux:**
-
-```bash
-cp .env.example .env
-```
-
-### 4. Prepare simulated data
-
-```bash
-python -m scripts.setup_data
-```
-
-### 5. Run tests
-
-```bash
-pytest -q
-```
-
-### 6. Launch the interface
-
-```bash
+```powershell
 chainlit run app.py
 ```
 
-Open the local URL printed by Chainlit, typically `http://localhost:8000`.
+Open the local URL printed by the application.
 
-> **Note:** If a command is unavailable, inspect the repository’s `scripts/`, configuration files, and execution guide rather than assuming an optional component is present.
+If an entry point or setup script is absent, check the current repository structure rather than assuming that an optional script exists.
 
-## Example attack scenario
+## Example Attack Scenario
 
-The execution guide uses a vendor-update scenario to demonstrate defense in depth:
+Consider a user asking:
 
-1. The user asks: **“What changed in the vendor update?”**
-2. The agent searches documents and receives a vendor-update passage containing an injected instruction.
-3. Ingress tags the retrieved content as untrusted; Q-Gate may quarantine or flag the injected sentence.
-4. If the model proposes emailing data to `audit@evil-corp.io`, deterministic taint and outbound-destination rules block the action.
-5. The agent can still answer the legitimate question from the vetted passage: **“Shipping to Pune now takes 4 days”**, with a valid passage citation.
-6. Output checks validate the citation and value, and the audit log records the decisions.
+> What changed in the vendor update?
 
-The expected outcome for the full configuration is a grounded answer, no external email in the simulated outbox, visible security-layer verdicts, and an intact audit chain. Verify this against the active model and configuration.
+A retrieved document contains an instruction attempting to redirect the agent to send sensitive information to an external recipient.
 
-## Security boundaries and limitations
+Aegis handles the scenario through several checks:
 
-- Q-Gate uses a quantum simulator; this is not evidence of quantum advantage.
-- Demo tools are simulated and do not send real emails or access real company systems.
-- Classifiers can miss attacks and flag benign content, so the architecture uses multiple layers.
-- Taint tracking is heuristic and can be evaded by paraphrasing or transforming data; outbound allowlists and confirmation rules provide additional checks.
-- A hash chain can detect many forms of in-chain tampering, but does not establish that the original event was truthful.
-- Optional/recommended layers may not be enabled in every configuration.
-- Evaluation claims must match the committed result files, test-set sizes, and configuration used.
+1. The agent retrieves the relevant document.
+2. Ingress identifies untrusted content and applies data-protection checks.
+3. Q-Gate evaluates the suspicious text and may flag or quarantine it.
+4. The LLM proposes an answer or a tool action.
+5. The tool-safety layer evaluates the proposed action against registration, argument, taint, and outbound-destination rules.
+6. If the action is denied, the simulated email is not sent through that blocked action.
+7. The grounded-response stage generates an answer from vetted evidence.
+8. Citation and output-verification checks inspect the answer.
+9. Audit events record the relevant decisions for later verification.
 
----
+This illustrates the intended defense-in-depth design. The outcome of a particular run must be verified using its actual configuration, observable effects, and audit records.
 
-## Project principle
+## Limitations
 
-**Probabilistic detectors raise suspicion. Deterministic policy layers control actions. Grounding checks verify answers. The audit chain records the decisions.**
+- Q-Gate runs on a quantum simulator; quantum advantage is not claimed.
+- Demo tools are simulated and do not replace real-world security controls.
+- Input classifiers and injection detectors can miss malicious content or misclassify benign content.
+- Heuristic normalization and taint tracking cannot guarantee detection of every obfuscated or transformed payload.
+- H2 checks citation structure and source values but does not establish full semantic correctness.
+- H3 depends on the availability and reliability of the NLI model.
+- A valid audit chain does not prove that its events are true.
+- Optional security layers may not be enabled in every configuration.
+- Performance claims should be supported by the corresponding result files, test-set sizes, and evaluation configuration.
+- A successful test run demonstrates the tested behavior only; it does not prove that every possible attack is prevented.
+
+## Project Principle
+
+**Probabilistic detectors identify suspicious content. Deterministic policy layers control actions. Grounding checks verify answers. The audit chain records the decisions.**
