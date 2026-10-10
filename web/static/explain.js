@@ -152,7 +152,9 @@
       <section class="beat" style="--t:${T.squeeze.toFixed(2)}s"><h4><span class="num">2</span> The most suspicious sentence becomes ${feats.length} numbers</h4>${N[1]}
         <div class="squeeze"><blockquote>“${esc(sents[ti]?.text || "")}”</blockquote><span class="arrow">→</span>
           <div class="chips">${feats.map((f, i) => `<span class="chip4" style="--t:${(T.squeeze + 0.4 + i * 0.2).toFixed(2)}s"><small>x${i}</small>${f.toFixed(2)}</span>`).join("")}</div></div>
-        <p class="note">Character patterns (TF-IDF) are compressed to the ${feats.length} strongest directions (SVD) and scaled to angles between 0 and π.</p></section>
+        <p class="note">${d.embed === "semantic"
+          ? `The sentence's <b>meaning</b> (a 384-number MiniLM sentence embedding) is compressed to its ${feats.length} strongest directions (PCA) and scaled to angles between 0 and π.`
+          : `Character patterns (TF-IDF) are compressed to the ${feats.length} strongest directions (SVD) and scaled to angles between 0 and π.`}</p></section>
 
       <section class="beat" style="--t:${T.bloch.toFixed(2)}s"><h4><span class="num">3</span> Each number rotates one qubit on its Bloch sphere</h4>${N[2]}
         <div class="bloch-row">${feats.map((f, i) => (i ? `<div class="zz-link" style="--t:${(T.bloch + 0.9 + i * 0.3).toFixed(2)}s"><span>ZZ</span></div>` : "")

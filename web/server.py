@@ -228,7 +228,8 @@ def audit(limit: int = 60):
 def results():
     out = {"final": None, "qgate": None, "tuning": None, "summary": [], "images": []}
     rd = Path("results")
-    finals = sorted(rd.glob("qgate_hf_training_*.json")) if rd.exists() else []
+    finals = sorted(rd.glob("qgate_hf_training_*.json"),        # the largest training run wins (…_4096 over …_256)
+                    key=lambda p: int(p.stem.rsplit("_", 1)[-1]) if p.stem.rsplit("_", 1)[-1].isdigit() else 0) if rd.exists() else []
     if finals:                                       # M3's final 8-qubit run on the HF dataset
         out["final"] = json.loads(finals[-1].read_text())
     if (rd / "qgate_e1_e2.json").exists():
@@ -275,4 +276,4 @@ if __name__ == "__main__":
     threading.Thread(target=_warm_up, daemon=True).start()   # only when serving, never on import (tests)
     port = int(os.environ.get("AEGIS_PORT", "8000"))
     print(f"Aegis UI on http://localhost:{port}   (model {llm.MODEL}, judge {llm.JUDGE_MODEL})")
-    uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
+    uvicorn.run(app, host=os.environ.get("AEGIS_HOST", "127.0.0.1"), port=port, log_level="warning")

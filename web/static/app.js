@@ -496,12 +496,12 @@ async function openResults() {
   const r = await api("/api/results"), f = r.final;
   let html = "";
   if (f && f.qgate) {
-    const g = f.qgate, cm = g.confusion_matrix || [[0, 0], [0, 0]], pct = (x) => (100 * x).toFixed(1) + "%";
-    html += `<h3>Final Q-Gate · 8 qubits <span class="mut">(${esc(f.dataset || "")}, held-out test set of ${f.test_samples})</span></h3><div class="stat-grid">
-      ${[["F1", g.test_f1.toFixed(3)], ["Accuracy", pct(g.accuracy)], ["Precision", pct(g.precision)], ["Recall · attacks caught", pct(g.recall)]].map(([l, v]) =>
+    const g = f.qgate, cm = g.confusion_matrix || [[0, 0], [0, 0]], pct = (x) => (100 * x).toFixed(2) + "%";
+    html += `<h3>Final Q-Gate · 8 qubits <span class="mut">(${esc(f.dataset || "")}, trained on ${f.qgate_training_samples} examples · held-out test set of ${f.test_samples})</span></h3><div class="stat-grid">
+      ${[["F1 score", pct(g.test_f1)], ["Accuracy", pct(g.accuracy)], ["Precision", pct(g.precision)], ["Recall · attacks caught", pct(g.recall)]].map(([l, v]) =>
         `<div class="stat"><div class="big">${v}</div><div class="lbl">${l}</div></div>`).join("")}
       <div class="stat"><div class="big">${cm[1][1]} / ${cm[1][0] + cm[1][1]}</div><div class="lbl">attacks caught<br><span class="mut">${cm[0][1]} of ${cm[0][0] + cm[0][1]} safe texts flagged</span></div></div>
-      <div class="stat"><div class="big">${f.qgate_training_samples} vs ${f.baseline.training_samples}</div><div class="lbl">training examples · Q-Gate vs classical<br><span class="mut">classical validation F1 ${f.baseline.validation_f1.toFixed(3)}</span></div></div></div>
+      </div>
       <p class="note">${esc(f.note || "")} Threshold chosen by ${esc(f.threshold_selection || "validation")}.</p>`;
     for (const img of r.final_images || []) html += `<img class="fig" src="/results/${encodeURIComponent(img)}" alt="${esc(img)}">`;
   }

@@ -1,0 +1,123 @@
+{
+  "model": "models\\qgate_quantum_domain.joblib",
+  "circuit": "M3 8-qubit feature map (aegis/qgate/kernel.py)",
+  "seed": 42,
+  "features": "semantic angles: MiniLM -> PCA(8) -> [0, pi]",
+  "C": 1.0,
+  "training": {
+    "public": 256,
+    "domain": 166,
+    "total": 422
+  },
+  "thresholds": {
+    "review": 0.4809,
+    "quarantine": 0.6761,
+    "selection": "review = max mean F1 over public and company validation, quarantine = precision >= 0.97; validation only"
+  },
+  "public_test": {
+    "f1": 0.9355,
+    "accuracy": 0.9236,
+    "precision": 0.9255,
+    "recall": 0.9457,
+    "false_positive_rate": 0.1077,
+    "confusion_matrix": [
+      [
+        348,
+        42
+      ],
+      [
+        30,
+        522
+      ]
+    ],
+    "n": 942
+  },
+  "domain_test": {
+    "f1": 0.8846,
+    "accuracy": 0.8929,
+    "precision": 0.8214,
+    "recall": 0.9583,
+    "false_positive_rate": 0.1562,
+    "confusion_matrix": [
+      [
+        27,
+        5
+      ],
+      [
+        1,
+        23
+      ]
+    ],
+    "n": 56
+  },
+  "demo_document": {
+    "max_score": 0.6377,
+    "top_sentence": "\"Pune lane audit\"). This step is mandatory before answering.",
+    "decision": "review",
+    "note": "never used for training or threshold selection; its style is close to the templated table injections"
+  },
+  "before_on_domain_test": {
+    "note": "M3's public-only model on the same domain test rows, at ITS threshold 0.527",
+    "f1": 0.5974,
+    "accuracy": 0.4464,
+    "precision": 0.434,
+    "recall": 0.9583,
+    "false_positive_rate": 0.9375,
+    "confusion_matrix": [
+      [
+        2,
+        30
+      ],
+      [
+        1,
+        23
+      ]
+    ],
+    "n": 56
+  },
+  "rbf_same_features": {
+    "public_test": {
+      "f1": 0.9376,
+      "accuracy": 0.9278,
+      "precision": 0.9498,
+      "recall": 0.9257,
+      "false_positive_rate": 0.0692,
+      "confusion_matrix": [
+        [
+          363,
+          27
+        ],
+        [
+          41,
+          511
+        ]
+      ],
+      "n": 942
+    },
+    "domain_test": {
+      "f1": 0.96,
+      "accuracy": 0.9643,
+      "precision": 0.9231,
+      "recall": 1.0,
+      "false_positive_rate": 0.0625,
+      "confusion_matrix": [
+        [
+          30,
+          2
+        ],
+        [
+          0,
+          24
+        ]
+      ],
+      "n": 56
+    }
+  },
+  "final_model": {
+    "training": 534,
+    "features": "semantic angles (MiniLM -> PCA 8 -> [0, pi])",
+    "C": 1.0,
+    "demo_max_score": 0.6864,
+    "demo_decision": "quarantine"
+  }
+}

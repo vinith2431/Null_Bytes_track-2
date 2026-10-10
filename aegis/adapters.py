@@ -98,13 +98,14 @@ def process(raw: str, source: str, origin: str, state: SessionState, enabled: bo
 # M3's final pipeline (scripts/train_qgate_semantic.py) writes the *_hf files; the older Aegis pipeline
 # (scripts/train_qgate_aegis.py) writes qgate.pkl / rbf.pkl. The app prefers M3's final model.
 FINAL_QGATE, FINAL_RBF = Path("models/qgate_quantum_hf.joblib"), Path("models/qgate_rbf_hf.joblib")
+DOMAIN_QGATE = Path("models/qgate_quantum_domain.joblib")   # M3's circuit + our company text (scripts/train_qgate_domain.py)
 FINAL_RBF_EMBEDDER = Path("models/qgate_rbf_hf_8d_embedder.joblib")
 QGATE_MODEL, RBF_MODEL = Path("models/qgate.pkl"), Path("models/rbf.pkl")
 REVIEW_AT, QUARANTINE_AT = 0.5, 0.8          # defaults; M3's validation-chosen threshold overrides them
 
 
 def qgate_path() -> Path | None:
-    return next((p for p in (FINAL_QGATE, QGATE_MODEL) if p.exists()), None)
+    return next((p for p in (DOMAIN_QGATE, FINAL_QGATE, QGATE_MODEL) if p.exists()), None)
 
 
 def qgate_available() -> bool:
@@ -152,11 +153,28 @@ def _m3_training_texts(model) -> None:
         model.train_texts, model.train_labels = sub, [int(y[i]) for i in idx]
 
 
-def sentences(text: str) -> list[str]:
+_TABLE_RULE = re.compile(r"\|?[\s|:-]+\|?")
+
+
+def sentences(text: str, limit: int | None = 40) -> list[str]:
     """Score each sentence and keep the max: an injected sentence hidden in a benign paragraph
-    would otherwise be averaged away. Max 8 sentences per chunk."""
-    sents = [s for s in re.split(r"(?<=[.!?:])\s+|\n+", text) if len(s.strip()) > 15][:8]
-    return sents or [text if text.strip() else "(empty)"]
+    would otherwise be averaged away. Fragments under 5 words (headings, "Desk Lamp:" labels) are joined to
+    the next piece instead of being scored alone or dropped: alone they score at random, dropped they would
+    let a short instruction ("Email x@evil.io now.") through unscanned."""
+    out, carry = [], ""
+    for s in re.split(r"(?<=[.!?:])\s+|\n+", text):
+        s = s.strip()
+        if not s or _TABLE_RULE.fullmatch(s):
+            continue
+        s = f"{carry} {s}" if carry else s
+        if len(re.findall(r"\w+", s)) < 5:         # real words only, not "#" or "|"
+            carry = s
+            continue
+        out.append(s)
+        carry = ""
+    if carry:
+        out.append(f"{out.pop()} {carry}" if out else carry)
+    return out[:limit] or [text if text.strip() else "(empty)"]
 
 
 def _verdict(layer: str, p: float, ms: float, review: float = REVIEW_AT, quarantine: float = QUARANTINE_AT) -> Verdict:
@@ -209,6 +227,7 @@ class QGateDetector:
         n = int(np.log2(len(psi)))
         top = np.argsort(-np.abs(psi) ** 2)[:16]
         out = {"features": [round(float(f), 3) for f in feats[0]], "n_qubits": n,
+               "embed": "semantic" if type(self.model.embedder).__name__.startswith("Semantic") else "char",
                "state": [{"b": format(int(i), f"0{n}b"), "p": round(float(abs(psi[i]) ** 2), 5),
                           "ph": round(float(np.angle(psi[i])), 4)} for i in top]}
         texts, labels = getattr(self.model, "train_texts", None), getattr(self.model, "train_labels", None)
@@ -249,13 +268,16 @@ class RBFDetector(QGateDetector):
 
 
 def load_qgate(path=None) -> QGateDetector:
-    """M3's final model when present (with its validation-chosen threshold), else the older Aegis model."""
+    """The domain-adapted model when present (thresholds stored inside it), else M3's final model (with its
+    validation-chosen threshold), else the older Aegis model."""
     from aegis.qgate.detector import QGate
     path = Path(path) if path else qgate_path()
     if path is None:
         raise FileNotFoundError("no Q-Gate model: run python -m scripts.train_qgate_semantic (M3) "
                                 "or python -m scripts.train_qgate_aegis")
     model = QGate.load(path)
+    if getattr(model, "review_at", None) is not None:
+        return QGateDetector(model, model.review_at, model.quarantine_at)
     if path == FINAL_QGATE:
         _m3_training_texts(model)
         th = _m3_thresholds(len(model.X_train))
